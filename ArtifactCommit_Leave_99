@@ -1,0 +1,74 @@
+#!/bin/bash
+BASEDIR=$(dirname $0)
+
+if [ -e "$BASEDIR/TangleID.lib.sh" ]; then
+source "$BASEDIR/TangleID.lib.sh"
+else
+echo "no TangleID library" >&2
+exit
+fi 
+
+# get uuid 
+uuids=$(genUUID)
+
+for uuid in $uuids
+do
+    uuid=$uuid
+    break
+done
+
+if [ -e "/etc/mender/artifact_info" ]; then
+artifact_info=$(cat /etc/mender/artifact_info)
+else
+artifact_info="artifact_name=no-artifact-info"
+fi
+artifact_info=${artifact_info#*artifact_name=}
+
+if [ -e "/data/mender/device_type" ]; then
+device_type=$(cat /data/mender/device_type)
+else
+device_type="device_type=no-device-type"
+fi
+device_type=${device_type#*device_type=}
+
+set -ue
+
+LC_ALL=C
+export LC_ALL
+
+cpu_model=$(grep 'model name' /proc/cpuinfo | uniq | awk -F': ' '
+     // { printf("%s", $2);}
+')
+kernel=$(cat /proc/version)
+mem_total_kB=$(cat /proc/meminfo | awk '
+/MemTotal/ {printf("%d", $2)}
+')
+hostname=$(cat /etc/hostname)
+
+echo "$artifact_info : $(basename "$0") was called!" >&2
+echo "UUID : $uuid" >&2
+
+msg='{'\
+'\"artifact_info\":\"'$artifact_info'\",'\
+'\"device_type\":\"'$device_type'\",'\
+'\"cpu_model\":\"'$cpu_model'\",'\
+'\"kernel\":\"'$kernel'\",'\
+'\"mem_total_kB\":\"'$mem_total_kB'\",'\
+'\"hostname\":\"'$hostname'\",'\
+'\"uuid\":\"'$uuid'\"'\
+'}'
+
+
+body='{"command":"new_claim","uuid":"LASSTEST",'\
+'"part_a":"'$uuid'","part_b":"'$uuid'",'\
+'"exp_date":"20190101",'\
+'"claim_pic":"",'\
+'"msg":"'"$msg"'"}'
+
+echo "$body" >&2
+
+# new claim
+res=$(POST "$body")
+
+echo "$res" >&2
+
